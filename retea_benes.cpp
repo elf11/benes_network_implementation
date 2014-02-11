@@ -1,0 +1,168 @@
+/* Descriere algoritm retea Benes:
+ * privim reteaua benes pe verticala, adica input-urile vin de sus in jos
+ * pe primul rand sunt 2^(n -1) a.i. switchul j are date de la procesoarele
+ * 2j si 2j + 1. se aplica o perfect shuffle permutation pentru firele de la iesirea primului rand de switchuri si la intrarea celui de-al doilea rand de switch-uri
+ * adica ce avem la iesirea j intr-un rand se conecteaza ce avem la intrarea j' in celalalt rand, unde j' este obtinut prin rotirea la dreapta a unui bit a lui j(in binar)
+ * dac n > 2 atunci incepand cu urmatorul rand de switch-uri pana la ultimul exclusiv formeaza o retea Benes (n-1), si se aplica aceeasi formula
+ * pentru ultimul rand de switch-uri se applica inverse shuffle permutaiton pentru output-urile ultimului rand
+ */
+
+#include <cstdio>
+#include <cstring>
+#include <vector>
+
+using namespace std;
+
+/*
+ * dimensiunea maxima a retelei benes
+ */
+
+const int max_dim = 13;
+
+/*
+ * vectori pentru permutarile directe si inverse
+ */
+int perm[1 << max_dim];
+int inv_perm[1 << max_dim];
+
+/*
+ * starea in care este switch-ul, punem 0 daca o ia pe sus
+ * si 1 daca o ia pe jos
+ */
+char switched[2 * max_dim - 1][1 << (max_dim - 1)];
+
+/*
+ * vectorul cai permutarii prin reteaua benes
+ */
+char path[1 << max_dim];                          
+
+
+void DFS(int idx, int route) {
+
+  path[idx] = route;
+
+  if (path[idx ^ 1] < 0)
+  	DFS(idx ^ 1, route ^ 1);
+
+  idx = perm[inv_perm[idx] ^ 1];
+ 
+  if (path[idx] < 0)
+  	DFS(idx, route ^ 1);
+}
+
+int shuffle(int i, int n) { 
+	return ((i & 1) << (n - 1)) | (i >> 1); 
+}
+
+void benes_route(int n, int lvl_p, int perm_idx, const vector<int> &src, const vector<int> &dest) {
+
+  int values, levels, i, j, x, s;
+  vector<int> bottom1;
+  vector<int> top1;
+  
+  /*
+   * daca avem doar un nivel in retea
+   */
+  if (n == 1) {
+  	switched[lvl_p][perm_idx] = src[0] != dest[0]; 
+  	return; 
+  }
+  
+  /*
+   * aflam dimensiunea retelei benes
+   */
+  values = 1 << n;
+  levels = 2 * n - 1;
+  
+  vector<int> bottom2(values / 2);
+  vector<int> top2(values / 2);
+
+  /*
+   * destinatia este o permutare a intrari
+   */
+  for (i = 0; i < values; ++i)
+  	inv_perm[src[i]] = i;
+ 
+  for (i = 0; i < values; ++i)
+  	perm[i] = inv_perm[dest[i]];
+ 
+  for (i = 0; i < values; ++i)
+  	inv_perm[perm[i]] = i;
+ 
+ /*
+  * cautam sa vedem ce switch-uri vor fi activate in partea
+  * inferioara a retelei
+  */
+  memset(path, -1, sizeof(path));
+  for (i = 0; i < values; ++i)
+  	if (path[i] < 0)
+  		DFS(i, 0);
+  
+  /*
+   * calculam noile perechi sursa-destinatie
+   * 1 pentru partea superioara
+   * 2 pentru partea inferioara
+   */
+  // partea superioara
+  for (i = 0; i < values; i += 2) {
+    switched[lvl_p][perm_idx + i / 2] = path[i];
+    for (j = 0; j < 2; ++j) {
+      x = shuffle((i | j) ^ path[i], n);
+      if (x < values / 2) bottom1.push_back(i | j); 
+      else top1.push_back(i | j);
+    }
+  }
+
+  //partea inferioara
+  for (i = 0; i < values; i += 2) {
+    s = switched[lvl_p + levels - 1][perm_idx + i / 2] = path[perm[i]];
+    for (j = 0; j < 2; ++j) {
+      x = shuffle((i | j) ^ s, n);
+      if (x < values / 2) bottom2[x] = perm[i | j]; 
+      else top2[x - values / 2] = perm[i | j];
+    }
+  }
+
+  /*
+   * recursivitate prin partea superioara si inferioara
+   */
+  benes_route(n - 1, lvl_p + 1, perm_idx, bottom1, bottom2);
+  benes_route(n - 1, lvl_p + 1, perm_idx + values / 4, top1, top2);
+}
+
+int main() {
+
+  int N, i, j, values, levels;
+  bool first = true;
+
+  while (scanf("%i", &N) == 1, N) {
+    values = 1 << N;
+    levels = 2 * N- 1;
+    
+    vector<int> dest(values);
+    vector<int> src(values);
+    
+    for (i = 0; i < values; ++i)
+    	src[i] = i;
+
+    for (i = 0; i < values; ++i)
+    	scanf("%i", &dest[i]);
+
+    benes_route(N, 0, 0, src, dest);
+
+    if (!first)
+    	printf("\n");
+    else first = false;
+
+    for (i = 0; i < levels; ++i) {
+      for (j = 0; j < values / 2; ++j) {
+      	if (switched[i][j] == 0)
+      		printf("straight ");
+      	else
+      		printf("cross ");
+      }
+      printf("\n");
+    }
+  }
+  return 0;
+}
